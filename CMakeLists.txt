@@ -58,6 +58,7 @@ target_link_options(${TARGET}  PUBLIC
 
 target_compile_options(${TARGET}
   PUBLIC
+    -Os
     -Wall
     -Wno-attributes
     -Wno-strict-aliasing

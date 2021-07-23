@@ -138,8 +138,8 @@ void Bluemchen::InitDisplay()
 
 void Bluemchen::InitMidi()
 {
-    // daisy::MidiUartHandler::Config midi_config;
-    // midi.Init(midi_config);
+    daisy::MidiUartHandler::Config midi_config;
+    midi.Init(midi_config);
 }
 
 void Bluemchen::InitEncoder()
