@@ -3,6 +3,7 @@
 #include <q/pitch/pitch_detector.hpp>
 #include <string.h>
 #include <util/CpuLoadMeter.h>
+#include <algorithm>
 
 using namespace kxmx;
 using namespace daisy;
@@ -12,150 +13,167 @@ using namespace q::literals;
 
 constexpr auto sps = 48000;
 
-Bluemchen bluemchen;
+Bluemchen    bluemchen;
 CpuLoadMeter load_meter;
 
-float frequency_l;
-float frequency_r;
-float frequency;
+float frequency_a;
+float frequency_b;
 
-float envelope_l;
-float envelope_r;
-float envelope;
+float envelope_a;
+float envelope_b;
 
-q::frequency lowest_frequency = 80_Hz;
-q::frequency highest_frequency = 500_Hz;
+int idx_a = 0;
+int idx_b = 1;
 
-q::frequency eq_low_frequency = 135_Hz;
-q::frequency eq_mid_frequency = 2.58_kHz;
-q::frequency eq_high_frequency = 5.37_kHz;
+class guitar_string
+{
+  public:
+    guitar_string(std::string  name,
+                  q::frequency lowest_frequency,
+                  q::frequency highest_frequency);
 
-q::highpass high_pass_filter_l(lowest_frequency, sps);
-q::highpass high_pass_filter_r(lowest_frequency, sps);
+    std::string               name;
+    q::frequency              lowest_frequency;
+    q::frequency              highest_frequency;
+    q::highpass               hpf;
+    q::lowpass                lpf;
+    q::fast_envelope_follower envelope;
+    q::pitch_detector         pitch_detector;
+};
 
-q::lowpass low_pass_filter_l(highest_frequency, sps);
-q::lowpass low_pass_filter_r(highest_frequency, sps);
-
-q::peaking eq_filter_low(-10.0f, eq_low_frequency, sps, 0.4f);
-q::peaking eq_filter_mid(3.0f, eq_mid_frequency, sps, 0.8f);
-q::peaking eq_filter_high(1.0f, eq_high_frequency, sps, 0.6f);
-
-q::fast_envelope_follower envelope_follower_l(lowest_frequency.period() * 0.6,
-                                              sps);
-q::fast_envelope_follower envelope_follower_r(lowest_frequency.period() * 0.6,
-                                              sps);
-
-q::pitch_detector pitch_detector_l(lowest_frequency, highest_frequency, sps,
-                                   -45_dB);
-q::pitch_detector pitch_detector_r(lowest_frequency, highest_frequency, sps,
-                                   -45_dB);
-
-void UpdateOled() {
-  bluemchen.display.Fill(false);
-
-  bluemchen.display.SetCursor(0, 0);
-  std::string str = "Frq: ";
-  char *cstr = &str[0];
-  bluemchen.display.WriteString(cstr, Font_6x8, true);
-
-  str = std::to_string(static_cast<int>(frequency * 100.0f));
-  bluemchen.display.SetCursor(30, 0);
-  bluemchen.display.WriteString(cstr, Font_6x8, true);
-
-  str = "Env: ";
-  bluemchen.display.SetCursor(0, 8);
-  bluemchen.display.WriteString(cstr, Font_6x8, true);
-
-  str = std::to_string(static_cast<int>(envelope * 100.0f));
-  bluemchen.display.SetCursor(30, 8);
-  bluemchen.display.WriteString(cstr, Font_6x8, true);
-
-  str = "Lod: ";
-  bluemchen.display.SetCursor(0, 24);
-  bluemchen.display.WriteString(cstr, Font_6x8, true);
-
-  str = std::to_string(static_cast<int>(load_meter.GetAvgCpuLoad() * 100.0f));
-  bluemchen.display.SetCursor(30, 24);
-  bluemchen.display.WriteString(cstr, Font_6x8, true);
-
-  bluemchen.display.Update();
+inline guitar_string::guitar_string(std::string  name,
+                                    q::frequency lowest_frequency,
+                                    q::frequency highest_frequency)
+: name{name},
+  highest_frequency{highest_frequency},
+  lowest_frequency{lowest_frequency},
+  hpf{lowest_frequency, sps},
+  lpf{highest_frequency, sps},
+  envelope{lowest_frequency.period() * 0.6, sps},
+  pitch_detector{lowest_frequency, highest_frequency, sps, -45_dB}
+{
 }
 
-void UpdateControls() { 
-  bluemchen.ProcessAllControls(); 
+
+std::vector<guitar_string> strings = {
+    {"e", 73.4_Hz, 329.6_Hz},
+    {"A", 98_Hz, 493.9_Hz},
+    {"D", 146.8_Hz, 659.3_Hz},
+    {"G", 185_Hz, 880.9_Hz},
+    {"B", 246.9_Hz, 1108.7_Hz},
+    {"E", 293.7_Hz, 1318.5_Hz},
+    {"*", 73.4_Hz, 1318.5_Hz},
+    {"*", 73.4_Hz, 1318.5_Hz},
+};
+
+
+void UpdateOled()
+{
+    bluemchen.display.Fill(false);
+
+    bluemchen.display.SetCursor(0, 0);
+    std::string str  = strings[idx_a].name ;
+    char*       cstr = &str[0];
+    bluemchen.display.WriteString(cstr, Font_6x8, true);
+
+    str = std::to_string(static_cast<int>(frequency_a * 100.0f));
+    bluemchen.display.SetCursor(30, 0);
+    bluemchen.display.WriteString(cstr, Font_6x8, true);
+
+    str = strings[idx_b].name;
+    bluemchen.display.SetCursor(0, 8);
+    bluemchen.display.WriteString(cstr, Font_6x8, true);
+
+    str = std::to_string(static_cast<int>(frequency_b * 100.0f));
+    bluemchen.display.SetCursor(30, 8);
+    bluemchen.display.WriteString(cstr, Font_6x8, true);
+
+    str = "Lod: ";
+    bluemchen.display.SetCursor(0, 24);
+    bluemchen.display.WriteString(cstr, Font_6x8, true);
+
+    str = std::to_string(static_cast<int>(load_meter.GetAvgCpuLoad() * 100.0f));
+    bluemchen.display.SetCursor(30, 24);
+    bluemchen.display.WriteString(cstr, Font_6x8, true);
+
+    bluemchen.display.Update();
 }
 
-void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
-                   size_t size) {
-  load_meter.OnBlockStart();
-  UpdateControls();
-  for (size_t i = 0; i < size; i++) {
-    float sig_l = in[0][i];
-    float sig_r = in[1][i];
-    float pd_sig_l;
-    float pd_sig_r;
+void UpdateControls()
+{
+    bluemchen.ProcessAllControls();
 
-    float eq_sig_l;
-    // float eq_sig_r;
+    int32_t inc = bluemchen.encoder.Increment();
 
-
-    // Envelope followers
-    envelope_l = envelope_follower_l(abs(sig_l));
-    envelope_r = envelope_follower_r(abs(sig_r));
-
-    // Basic signal conditioning
-    pd_sig_l = high_pass_filter_l(sig_l);
-    pd_sig_l = low_pass_filter_l(pd_sig_l);
-
-    pd_sig_r = high_pass_filter_r(sig_r);
-    pd_sig_r = low_pass_filter_r(pd_sig_r);
-
-    if (pitch_detector_l(pd_sig_l)) {
-      auto f = pitch_detector_l.get_frequency();
-      if (f != 0.0f) {
-        frequency_l = f;
-      }
+    if(inc != 0)
+    {
+        idx_a = std::clamp(static_cast<int>(idx_a + inc),
+                           static_cast<int>(0),
+                           static_cast<int>(strings.size() - 2));
+        idx_b = idx_a + 1;
     }
-
-    if (pitch_detector_r(pd_sig_r)) {
-      auto f = pitch_detector_r.get_frequency();
-      if (f != 0.0f) {
-        frequency_r = f;
-      }
-    }
-
-    // auto frequency_delta = abs(frequency_l - frequency_r);
-    // if (frequency_delta < 0.5f) {
-    //   frequency = (frequency_l > frequency_r)
-    //                   ? frequency_l - (frequency_delta / 2)
-    //                   : frequency_r - (frequency_delta / 2);
-    // }
-
-    frequency = frequency_l;
-    envelope = envelope_l;
-
-
-    eq_sig_l = eq_filter_low(sig_l);
-    eq_sig_l = eq_filter_mid(eq_sig_l);
-    eq_sig_l = eq_filter_high(eq_sig_l);
-
-
-    out[0][i] = sig_l;
-    out[1][i] = eq_sig_l;
-  }
-  load_meter.OnBlockEnd();
 }
 
-int main(void) {
-  bluemchen.Init();
-  bluemchen.StartAdc();
+void AudioCallback(AudioHandle::InputBuffer  in,
+                   AudioHandle::OutputBuffer out,
+                   size_t                    size)
+{
+    load_meter.OnBlockStart();
+    UpdateControls();
+    for(size_t i = 0; i < size; i++)
+    {
+        float sig_l = in[0][i];
+        float sig_r = in[1][i];
+        float pd_sig_l;
+        float pd_sig_r;
 
-  load_meter.Init(bluemchen.seed.AudioSampleRate(),
-                  bluemchen.seed.AudioBlockSize());
+        // Envelope followers
+        envelope_a = strings[idx_a].envelope(abs(sig_l));
+        envelope_b = strings[idx_b].envelope(abs(sig_l));
 
-  bluemchen.StartAudio(AudioCallback);
+        // Basic signal conditioning
+        pd_sig_l = strings[idx_a].hpf(sig_l);
+        pd_sig_l = strings[idx_b].hpf(pd_sig_l);
 
-  while (1) {
-    UpdateOled();
-  }
+        pd_sig_r = strings[idx_a].lpf(sig_r);
+        pd_sig_r = strings[idx_b].lpf(pd_sig_r);
+
+        if(strings[idx_a].pitch_detector(pd_sig_l))
+        {
+            auto f = strings[idx_a].pitch_detector.get_frequency();
+            if(f != 0.0f)
+            {
+                frequency_a = f;
+            }
+        }
+
+        if(strings[idx_b].pitch_detector(pd_sig_r))
+        {
+            auto f = strings[idx_b].pitch_detector.get_frequency();
+            if(f != 0.0f)
+            {
+                frequency_b = f;
+            }
+        }
+
+        out[0][i] = sig_l;
+        out[1][i] = sig_r;
+    }
+    load_meter.OnBlockEnd();
+}
+
+int main(void)
+{
+    bluemchen.Init();
+    bluemchen.StartAdc();
+
+    load_meter.Init(bluemchen.seed.AudioSampleRate(),
+                    bluemchen.seed.AudioBlockSize());
+
+    bluemchen.StartAudio(AudioCallback);
+
+    while(1)
+    {
+        UpdateOled();
+    }
 }
