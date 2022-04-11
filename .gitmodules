@@ -1,12 +1,12 @@
 [submodule "lib/q"]
 	path = lib/q
-	url = git@github.com:recursinging/q.git
+	url = https://github.com/recursinging/q.git
 [submodule "lib/kxmx_bluemchen"]
 	path = lib/kxmx_bluemchen
-	url = git@github.com:recursinging/kxmx_bluemchen.git
+	url = https://github.com/recursinging/kxmx_bluemchen.git
 [submodule "lib/libDaisy"]
 	path = lib/libDaisy
-	url = git@github.com:recursinging/libDaisy.git
+	url = https://github.com/recursinging/libDaisy.git
 [submodule "lib/DaisySP"]
 	path = lib/DaisySP
-	url = git@github.com:recursinging/DaisySP.git
+	url = https://github.com/recursinging/DaisySP.git
